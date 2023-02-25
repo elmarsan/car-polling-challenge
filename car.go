@@ -1,24 +1,34 @@
 package main
 
-import (
-	"encoding/json"
-	"net/http"
-)
-
-// Car represents available car.
+// Car represents a car.
+// Car can being traveling carrying a group or waiting.
 type Car struct {
-	Id    int   `json:"id"`
-	Seats uint8 `json:"seats"`
+	id    int
+	seats int
+	group *Group
 }
 
-// loadCarsHandler handles http request for replace availableCars.
-func loadCarsHandler(w http.ResponseWriter, r *http.Request) {
-	var newCars []*Car
-	err := json.NewDecoder(r.Body).Decode(&newCars)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+// isTraveling checks if Car is traveling carrying a group.
+func (c *Car) isTraveling() bool {
+	return c.group != nil
+}
+
+// isWaiting checks if Car is waiting for travel.
+func (c *Car) isWaiting() bool {
+	return c.group == nil
+}
+
+// endTravel removes associated group to the car ending the travel
+func (c *Car) endTravel() {
+	if c.group != nil {
+		c.group.car = nil
 	}
 
-	newCars = availableCars
+	c.group = nil
+}
+
+// startTravel starts travel with given Group.
+func (c *Car) startTravel(g *Group) {
+	c.group = g
+	c.group.car = c
 }

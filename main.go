@@ -1,25 +1,23 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
 	"time"
 
 	"github.com/gorilla/mux"
 )
 
-var (
-	// Available cars
-	availableCars = []*Car{}
-	// Groups of people waiting for a car
-	waitingGroups = []*Group{}
-)
+var carPool = NewCarPool([]*Car{})
 
 func main() {
 	r := mux.NewRouter()
 
 	r.HandleFunc("/status", statusHandler).Methods("GET")
-	r.HandleFunc("/cars", loadCarsHandler).Methods("PUT")
+	r.HandleFunc("/cars", resetStateHandler).Methods("PUT")
 	r.HandleFunc("/journey", addGroupHandler).Methods("POST")
 	r.HandleFunc("/dropoff", dropGroupHandler).Methods("POST")
 
@@ -31,7 +29,29 @@ func main() {
 		Handler:      r,
 	}
 
-	if err := srv.ListenAndServe(); err != nil {
-		log.Fatal(err)
-	}
+	go func() {
+		log.Println("Listening on :8000...")
+
+		err := srv.ListenAndServe()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}()
+
+	go func() {
+		carPool.start()
+	}()
+
+	// Trap sigterm or interupt and gracefully shutdown the server
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	signal.Notify(c, os.Kill)
+
+	// Block until a signal is received.
+	sig := <-c
+	log.Println("Got signal:", sig)
+
+	// Gracefully shutdown the server, waiting max 30 seconds for current operations to complete
+	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
+	srv.Shutdown(ctx)
 }
